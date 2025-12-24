@@ -10,7 +10,6 @@
     :root{
       --bg:#070A12;
       --card:rgba(255,255,255,.06);
-      --card2:rgba(255,255,255,.09);
       --txt:rgba(255,255,255,.92);
       --muted:rgba(255,255,255,.70);
       --line:rgba(255,255,255,.14);
@@ -83,6 +82,16 @@
       70%{transform:translate(2%,-4%)}
       80%{transform:translate(-2%,4%)}
       90%{transform:translate(-4%,-1%)}
+    }
+
+    /* ===== FX canvas (particles) ===== */
+    #fx{
+      position:fixed;
+      inset:0;
+      z-index:1;          /* glow=0, grain=1, content=2 */
+      pointer-events:none;
+      opacity:.42;
+      mix-blend-mode: screen;
     }
 
     /* layout */
@@ -199,7 +208,6 @@
       background: radial-gradient(900px 500px at 20% 30%, rgba(124,58,237,.20), transparent 60%),
                   radial-gradient(900px 500px at 80% 50%, rgba(34,197,94,.14), transparent 55%);
       opacity:.8;
-      filter: blur(0px);
       pointer-events:none;
     }
     .heroCard > *{position:relative; z-index:1}
@@ -460,6 +468,7 @@
       *{animation: none !important; transition: none !important; scroll-behavior:auto !important}
       .reveal{opacity:1; transform:none; filter:none}
       .glow{opacity:.35}
+      #fx{display:none}
     }
 
     /* preloader */
@@ -514,6 +523,75 @@
       font-size: 12px;
       line-height: 1.6;
     }
+
+    /* ===== Surprise toast ===== */
+    .toast{
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 10001;
+      min-width: 220px;
+      max-width: 360px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(0,0,0,.28);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 12px 12px;
+      box-shadow: 0 22px 70px rgba(0,0,0,.55);
+      transform: translateY(14px) scale(.98);
+      opacity: 0;
+      filter: blur(2px);
+      transition: .35s ease;
+    }
+    .toast.show{
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      filter: blur(0);
+    }
+    .toastBadge{
+      display:inline-flex;
+      font-size: 11px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.82);
+    }
+    .toastText{
+      margin-top: 10px;
+      font-size: 13px;
+      color: rgba(255,255,255,.78);
+      line-height: 1.55;
+    }
+
+    /* ===== Ripple effect ===== */
+    .ripple{
+      position: relative;
+      overflow: hidden;
+    }
+    .rippleSpan{
+      position:absolute;
+      border-radius:999px;
+      transform: translate(-50%,-50%) scale(0);
+      background: radial-gradient(circle, rgba(255,255,255,.35), rgba(255,255,255,0) 70%);
+      width: 140px;
+      height: 140px;
+      animation: rip .55s ease-out forwards;
+      pointer-events:none;
+    }
+    @keyframes rip{
+      to{ transform: translate(-50%,-50%) scale(2.2); opacity:0; }
+    }
+
+    /* ===== Secret mode (Konami) ===== */
+    body.secret .glow{opacity:1}
+    body.secret .dot{animation-duration: 1.1s}
+    body.secret header{
+      border-color: rgba(255,255,255,.26);
+      box-shadow: 0 16px 70px rgba(124,58,237,.25);
+    }
   </style>
 </head>
 
@@ -521,6 +599,13 @@
   <div class="progress"><i id="prog"></i></div>
   <div class="glow" id="glow"></div>
   <div class="grain"></div>
+  <canvas id="fx"></canvas>
+
+  <!-- Surprise toast -->
+  <div class="toast" id="toast" aria-live="polite" aria-atomic="true">
+    <div class="toastBadge" id="toastBadge">UNLOCKED</div>
+    <div class="toastText" id="toastText">Welcome.</div>
+  </div>
 
   <!-- Preloader -->
   <div class="loader" id="loader">
@@ -552,7 +637,6 @@
       </nav>
 
       <div class="cta">
-        <!-- Optional: put your PDF link here later -->
         <a class="btn" href="https://github.com/azizjonradjabov840-cmd" target="_blank" rel="noreferrer">GitHub</a>
         <a class="btn primary" href="#contact">Hire / Contact</a>
       </div>
@@ -885,6 +969,164 @@
 
     // year
     document.getElementById('year').textContent = new Date().getFullYear();
+
+    // ===== Ripple on click (buttons/links/chips) =====
+    const rippleTargets = [
+      ...document.querySelectorAll('.btn, .link, nav a, .chip')
+    ];
+    rippleTargets.forEach(el => el.classList.add('ripple'));
+    document.addEventListener('click', (e) => {
+      const t = e.target.closest('.ripple');
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      const s = document.createElement('span');
+      s.className = 'rippleSpan';
+      s.style.left = (e.clientX - r.left) + 'px';
+      s.style.top  = (e.clientY - r.top) + 'px';
+      t.appendChild(s);
+      setTimeout(() => s.remove(), 600);
+    }, {passive:true});
+
+    // ===== Surprise toast per section =====
+    const toast = document.getElementById('toast');
+    const toastText = document.getElementById('toastText');
+    const toastBadge = document.getElementById('toastBadge');
+
+    const surprises = [
+      { id: 'projects',  badge:'UNLOCKED', text:'Projects loaded. Hover the cards 👀' },
+      { id: 'skills',    badge:'BOOST',    text:'Skills calibrated. Bars will animate ⚡' },
+      { id: 'education', badge:'ORIGIN',   text:'Education revealed. Building foundation 🧠' },
+      { id: 'contact',   badge:'READY',    text:'One click away. Let’s connect 🤝' }
+    ];
+
+    const shown = new Set();
+    function showToast(badge, text){
+      toastBadge.textContent = badge;
+      toastText.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.remove('show'), 2600);
+    }
+
+    const secIO = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        const id = en.target.id;
+        const s = surprises.find(x => x.id === id);
+        if (!s || shown.has(id)) return;
+        shown.add(id);
+        showToast(s.badge, s.text);
+      });
+    }, {threshold: 0.28});
+    surprises.forEach(s => {
+      const el = document.getElementById(s.id);
+      if (el) secIO.observe(el);
+    });
+
+    // ===== Particle field canvas (WOW background) =====
+    const canvas = document.getElementById('fx');
+    const ctx = canvas.getContext('2d');
+    let W=0,H=0, dpr=1;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function resize(){
+      dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = canvas.width = Math.floor(window.innerWidth * dpr);
+      H = canvas.height = Math.floor(window.innerHeight * dpr);
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(1,0,0,1,0,0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const mouse = {x: 0.5, y: 0.5};
+    window.addEventListener('pointermove', (e) => {
+      mouse.x = e.clientX / window.innerWidth;
+      mouse.y = e.clientY / window.innerHeight;
+    }, {passive:true});
+
+    const N = reduceMotion ? 0 : Math.floor((window.innerWidth * window.innerHeight) / 42000);
+    const pts = [];
+    for(let i=0;i<N;i++){
+      pts.push({
+        x: Math.random(), y: Math.random(),
+        vx:(Math.random()-.5)*0.12, vy:(Math.random()-.5)*0.12,
+        r: 0.9 + Math.random()*1.6
+      });
+    }
+
+    function loop(){
+      if (reduceMotion) return;
+      ctx.clearRect(0,0,W,H);
+
+      ctx.globalAlpha = 0.9;
+
+      for(const p of pts){
+        const dx = (mouse.x - p.x);
+        const dy = (mouse.y - p.y);
+        p.vx += dx * 0.00022;
+        p.vy += dy * 0.00022;
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+
+        if (p.x < -0.05) p.x = 1.05;
+        if (p.x > 1.05)  p.x = -0.05;
+        if (p.y < -0.05) p.y = 1.05;
+        if (p.y > 1.05)  p.y = -0.05;
+      }
+
+      for(let i=0;i<pts.length;i++){
+        const a = pts[i];
+        const ax = a.x * W, ay = a.y * H;
+
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255,255,255,.55)';
+        ctx.arc(ax, ay, a.r*dpr, 0, Math.PI*2);
+        ctx.fill();
+
+        for(let j=i+1;j<pts.length;j++){
+          const b = pts[j];
+          const bx = b.x * W, by = b.y * H;
+          const ddx = ax - bx, ddy = ay - by;
+          const dist = Math.sqrt(ddx*ddx + ddy*ddy) / dpr;
+
+          if (dist < 140){
+            const alpha = (1 - dist/140) * 0.18;
+            ctx.strokeStyle = `rgba(124,58,237,${alpha})`;
+            ctx.lineWidth = 1 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+            ctx.stroke();
+          }
+        }
+      }
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // ===== Konami code secret mode =====
+    const konami = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+    let k = 0;
+    window.addEventListener('keydown', (e) => {
+      const key = e.key;
+      if (key === konami[k]) {
+        k++;
+        if (k === konami.length) {
+          document.body.classList.toggle('secret');
+          showToast('SECRET', document.body.classList.contains('secret') ? 'Secret mode ON 😈' : 'Secret mode OFF 🙂');
+          k = 0;
+        }
+      } else {
+        k = 0;
+      }
+    });
   </script>
 </body>
 </html>
